@@ -1,0 +1,222 @@
+DESIGN
+
+TODO:
+    Read about encoding
+    Read about context management
+
+interfaces.py
+-------------
+
+class BaseInterface(object):
+    functions
+    ---------
+        read_raw:
+            read raw bytes from device
+            parameters:
+                size - number of bytes to read
+            returns:
+                bytes read (Bytes array)
+        
+        write_raw:
+            write raw bytes to device
+
+    properties
+    ----------
+        chunk_size:
+            default number of bytes to write
+
+    QUESTIONS
+    ---------
+        Should this handle encoding? - No because 'raw'
+
+
+class SocketInterface(BaseInterface):
+    init:
+        connects to socket
+        parameters:
+            address - ('ip', port)
+    write_raw:
+        self.sock.write(message)
+    read_raw:
+        self.sock.recv(size)
+    
+class PrologixEnetController(SocketInterface):
+    controls PrologixEnetInterface
+    open:
+        returns new PrologixEnetInterface
+        parameters:
+            gpib_addr
+    close:
+        sets gpib_addr of object to close invalid
+    
+    activate:
+        activates gpib_addr for reading and writing
+        parameters:
+            gpib_addr
+    gpib_write_raw:
+        activates and then writes raw
+        parameters:
+            gpib_addr
+            message
+    gpib_read_raw:
+        activates and then reads raw
+        parameters:
+            gpib_addr
+            size
+
+
+
+class PrologixEnetInterface(BaseInterface):
+    only initialize with deviceinterfaces.PrologixEnetController.open()
+    read_raw:
+        calls controller functions to read_raw
+    write_raw:
+        calls controller functions to write_raw
+    close:
+        calls controller functions to close
+        TODO: Make this not circular
+
+devices.py
+----------
+class BaseDevice(BaseInterface):
+    init:
+        parameters:
+            interface - object with read_raw and write_raw functions to be used for read and write
+            override_funcs? - bool telling to override all functions or iterable with function names to override
+        QUESTIONS:
+            check type? yes and issue warning if not base device
+
+    functions
+    ---------
+        read:
+            calls read_raw, decodes using encoding, removes read_termination
+            parameters:
+                encoding - encoding to use
+                read_termination - expected termination char(s)
+            returns:
+                processed string
+
+        write:
+            adds termination char(s), encodes using encoding, writes with write_raw
+            parameters:
+                message - string to send
+                encoding - encoding to use
+                write_termination - termination chars to append to end of message
+            returns:
+                number of bytes write_termination
+
+        query:
+            writes message then reads reply
+            parameters: 
+                message - message to write
+                delay - delay between write and read
+            returns
+                read string
+        idn:
+            returns self.query("*IDN?")
+        
+        rst:
+            writes "*RST" to device
+        
+        read_stb:
+            ???
+            returns contents of *STB?
+
+        close:
+            ???
+            marks session as invalid
+    
+    Properties
+    ----------
+        read_termination:
+            default read termination
+        
+        write_termination:
+            default write termination
+        
+        encoding:
+            default encoding
+
+        timeout:
+            timout for I/O operations
+
+        query_delay:
+            default delay for query operations (time between read and write)
+
+        
+class SignalGenerator(BaseDevice):
+    init:
+        parameters:
+            interface: passed to BaseDevice
+            output_range: limits output
+            gain_file:
+
+    Properties
+    ----------
+        frequency - MHz? read manual, implement prefixes
+        power - in dBm
+        rf_output - on or off
+        output_range - (min_output, max_output)
+    
+    Functions
+    ---------
+        panel_to_real: 
+            parameters:
+                panel_power - the power shown on the panel of the SignalGenerator
+            returns:
+                real power output
+        
+        real_to_panel:
+            inverse of panel_to_real
+        
+        power_sweep:
+            parameters:
+                out_powers:
+                    powers to output (real)
+                callback:
+                    callback function(power_out, state) to call
+                state:
+                    passed tp callback function
+        
+        profile_gain:
+            parameters:
+                filename - name of gainfile to write
+                get_real_power - function which returns the current measured power (implemented with a spectrum analyzer or similar)
+                points - number of points to take per returns
+                runs - number of runs to take
+
+        profile_gain_callback:
+            parameters:
+                panel_out - power output by signal generator 
+                state - tuple of get_real_power, gains, counter
+
+class SpectrumAnalyzer(BaseDevice):
+    
+    Properties
+    ----------
+    center_frequency - center frequency of window
+    span - span of window
+    reference_level - ref level of window
+    display_on - display on or off
+    continuous_sweep - continuous or single sweep mode
+
+    Functions
+    ---------
+    set_window:
+        sets up window with single function
+        parameters:
+            center_freq
+            span
+            ref_lvl
+
+    take_sweep:
+        take a single sweep if in single sweep mode
+    
+    peak_power:
+        returns the peak power in current window
+    
+    peak_frequency:
+        returns the frequency of the peak power marker in current window
+
+    
+    
