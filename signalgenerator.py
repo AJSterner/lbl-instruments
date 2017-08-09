@@ -5,7 +5,7 @@ from time import sleep
 import numpy as np
 from scipy.interpolate import interp1d
 
-from bncinst import BNC845
+from devices import BaseDevice
 
 DEFAULT_ADDRESS = ('131.243.201.231', 18)
 
@@ -49,8 +49,8 @@ class SignalGenerator(BaseDevice):
             raws, gains = np.loadtxt(self._gain_file, unpack=True)
             self._raw_to_real = interp1d(raws, raws + gains)
             self._real_to_raw = interp1d(raws + gains, raws)
-            self.min_output = min_output if min_output is not None else self._raw_to_real(panels[0])
-            self.max_output = max_output if max_output is not None else self._raw_to_real(panels[-1])
+            self.min_output = min_output if min_output is not None else self.raw_to_real(raws[0])
+            self.max_output = max_output if max_output is not None else self.raw_to_real(raws[-1])
         else:
             self.min_output = min_output if min_output is not None else -1E99
             self.max_output = max_output if max_output is not None else 1E99
@@ -64,17 +64,17 @@ class SignalGenerator(BaseDevice):
     def frequency(self, value):
         """ set real signal frequency (currently alias for raw_frequency) """
         self.raw_frequency = value
-    
+
     @property
     def power(self):
         """ returns current real output power """
         return self.raw_to_real(self.raw_power)
-        
+
     @power.setter
     def power(self, value):
         """ sets real power """
         new_power = self.real_to_raw(value)
-        assert min_power <= new_power <= max_power
+        assert self.min_output <= new_power <= self.max_output
         self.raw_power = new_power
 
     def power_sweep(self, output_powers, callback, state=None):
@@ -91,7 +91,8 @@ class SignalGenerator(BaseDevice):
             passed to callback on each set power
         """
         self.signal_on = False
-        self.power(output_powers[0])
+        self.power = output_powers[0]
+
         try:
             self.signal_on = True
             sleep(1)
@@ -102,28 +103,47 @@ class SignalGenerator(BaseDevice):
             self.signal_on = False
             raise
 
-        self.rf_off()
+        self.signal_on = False
 
     def raw_to_real(self, raw_power):
         """ returns real output from raw output """
         if self._gain_file is not None:
             return self._raw_to_real(raw_power)
-        else:
-            return raw_power
+        return raw_power
 
     def real_to_raw(self, real_power):
         """ returns raw power from real power """
         if self._gain_file is not None:
             return self._real_to_raw(real_power)
-        else:
-            return real_power
+        return real_power
 
-    """ abstract functions """
+    def profile(self, filename, output_powers, get_real_power, runs=3):
+        """ get description from old file """
+        gains = np.zeros((runs, len(output_powers)))
+        for i in range(runs):
+            print("\nRun " + str(i + 1) + ":")
+            state = (get_real_power, gains[i], iter(range(gains[i].size)))
+            self.power_sweep(output_powers, self.profile_callback, state)
+
+        means = gains.mean(axis=0)
+        stds = gains.std(axis=0)
+        with open(filename, 'w+') as gainfile:
+            for vals in zip(output_powers, means, stds):
+                gainfile.write("{0:.2f} {1:.2f} {2:.2f}\n".format(*vals))
+
+    @staticmethod
+    def profile_callback(raw_power, state):
+        """ get description from old file """
+        get_real_power, gains, counter = state
+        gain = get_real_power() - raw_power
+        gains[next(counter)] = gain
+        print("Raw: {0:.2f}, Gain {1:.2f}".format(raw_power, gain))
+
     @property
     def raw_frequency(self):
         """ gets raw signal frequency """
         raise NotImplementedError
-    
+
     @raw_frequency.setter
     def raw_frequency(self, value):
         """ sets raw signal frequency """
@@ -148,4 +168,3 @@ class SignalGenerator(BaseDevice):
     def signal_on(self, value):
         """ set signal on or off """
         raise NotImplementedError
-
