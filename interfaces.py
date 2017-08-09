@@ -138,9 +138,24 @@ class PrologixEnetInterface(BaseInterface):
     """ device interface returned by PrologixEnetController """
     read_termination = None
     write_termination = "\r\n"
-    def __init__(self, gpib_addr, timeout=30000):
-        pass
-
+    
+    def __init__(self, controller, gpib_addr, timeout=30000):
+        self._controller = controller
+        self._gpib_addr = gpib_addr
+        self._timeout = timeout
+    
+    @property
+    def gpib_addr(self):
+        return self._gpib_addr
+        
+    
+class TempPrologixEnetInterface(SocketInterface):
+    """ works for only one device at a time """
+    def __init__(self, gpib_addr, addr, timeout=10.0, source_address=None):
+        check_gpib(gpib_addr)
+        super(TempPrologixEnetInterface, self).__init__(addr, timeout, source_address)
+        self.write_raw("++mode 1\n++auto 1\n++addr " + str(gpib_addr) + '\n')
+        
 # class PrologixController(SocketInterface):
 #     """ interface for prologix gpib enet controller """
 #     _PORT = 1234

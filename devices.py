@@ -136,3 +136,9 @@ class BaseDevice(BaseInterface):
             time.sleep(delay)
 
         return self.read()
+
+    def idn(self):
+        return self.query("*IDN?")
+
+    def rst(self):
+        self.write("*RST")
