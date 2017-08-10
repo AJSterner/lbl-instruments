@@ -3,3 +3,4 @@ adc*
 *.pyc
 testspec.py
 testprofile
+BNC*

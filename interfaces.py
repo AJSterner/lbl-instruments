@@ -80,6 +80,7 @@ class SocketInterface(BaseInterface):
             while len(chunk) == size:
                 sock, _, _ = select.select([self._sock], [], [], 0.5)
                 if sock:
+                    assert False
                     assert sock == self._sock
                     chunk = self._sock.recv(size)
                     ret += chunk
@@ -107,8 +108,8 @@ class PrologixEnetController(SocketInterface):
         super(PrologixEnetController, self).__init__((ip, self._PORT),
                                                      timeout=timeout,
                                                      source_address=source_address)
-        self._interfaces = dict()
-        self._active_interface = None
+        self._interfaces = set()
+        self._active = None
         """
         for more info see prologix.biz manual
         mode 1 - sets controller mode
@@ -117,20 +118,31 @@ class PrologixEnetController(SocketInterface):
         """
         init_msg = "++mode 1\n" + "++auto 1\n" + "++lon 0\n"
         self.write_raw(init_msg)
-    
-    def open(self, gpib_addr):
-        pass
-    
-    def close(self, pro_interface):
+
+    def open(self, gpib_addr, **kwargs):
+        """ returns a new PrologixEnetInterface """
+        check_gpib(gpib_addr)
+        
+        # TODO: better error 
+        if gpib_addr in self._interfaces:
+            raise ValueError("GPIB interface already active")
+        plx_interface = PrologixEnetInterface(self, gpib_addr)
+        for key, value in kwargs.items():
+            getattr(plx_interface, key)
+            setattr(plx_interface, key, value)
+        self._interfaces.update(gpib_addr)
+        return plx_interface
+
+    def close(self, plx_interface):
         pass
 
-    def activate_interface(self, pro_interface):
+    def activate(self, plx_interface):
         pass
-    
-    def interface_write_raw(self, pro_interface, message):
+
+    def interface_write_raw(self, plx_interface, message):
         pass
-    
-    def interface_read_raw(self, pro_interface, size):
+
+    def interface_read_raw(self, plx_interface, size):
         pass
 
 
@@ -138,24 +150,40 @@ class PrologixEnetInterface(BaseInterface):
     """ device interface returned by PrologixEnetController """
     read_termination = None
     write_termination = "\r\n"
-    
-    def __init__(self, controller, gpib_addr, timeout=30000):
+    timeout = 30000
+
+    def __init__(self, controller, gpib_addr):
         self._controller = controller
         self._gpib_addr = gpib_addr
-        self._timeout = timeout
-    
+
     @property
     def gpib_addr(self):
         return self._gpib_addr
-        
-    
+
+
 class TempPrologixEnetInterface(SocketInterface):
     """ works for only one device at a time """
     def __init__(self, gpib_addr, addr, timeout=10.0, source_address=None):
         check_gpib(gpib_addr)
         super(TempPrologixEnetInterface, self).__init__(addr, timeout, source_address)
-        self.write_raw("++mode 1\n++auto 1\n++addr " + str(gpib_addr) + '\n')
+        self.write_raw("++mode 1\n++auto 0\n++addr " + str(gpib_addr) + '\n'+ '++eos 0\n')
+
+    def read_raw(self, size=None):
+        timeout = self.timeout
+        self.timeout = 50
+        runs = int(timeout // 50 + 1)
+        for i in range(runs): 
+            self.write_raw("++read {:d}\n".format(ord('\n')))
+#            self.write_raw("++read eoi\n")
+            try:
+                message = super(TempPrologixEnetInterface, self).read_raw(size)
+                self.timeout = timeout
+                return message
+            except InterfaceTimeoutError:
+                pass
+        raise InterfaceTimeoutError
         
+
 # class PrologixController(SocketInterface):
 #     """ interface for prologix gpib enet controller """
 #     _PORT = 1234
@@ -247,10 +275,17 @@ def check_gpib(gpib_addr):
     checks if valid gpib_addr and returns it
     if not valid, raises proper exception
     """
-    if isinstance(gpib_addr, int) or (isinstance(gpib_addr, float) and gpib_addr.is_integer()):
-        if 0 <= gpib_addr <= 255:
+    if isinstance(gpib_addr, tuple):
+        if len(gpib_addr) <= 2:
+            for addr in gpib_addr:
+                check_gpib(addr)
             return gpib_addr
+        raise TypeError("gpib address must be an int PAD or (PAD, SAD) tuple")
+
+    if isinstance(gpib_addr, int) or (isinstance(gpib_addr, float) and gpib_addr.is_integer()):
+        if 0 <= gpib_addr <= 30:
+            return int(gpib_addr)
         else:
-            raise ValueError("gpib address must be between 0 and 255")
+            raise ValueError("gpib address must be between 0 and 30 inclusive")
     else:
         raise TypeError("gpib address must be integer")

@@ -98,7 +98,7 @@ class SignalGenerator(BaseDevice):
             sleep(1)
             for power in output_powers:
                 self.power = power
-                callback(power, state)
+                callback(power, self.raw_to_real(power), state)
         except:
             self.signal_on = False
             raise
@@ -119,9 +119,10 @@ class SignalGenerator(BaseDevice):
 
     def profile(self, filename, output_powers, get_real_power, runs=3):
         """ get description from old file """
-        gains = np.zeros((runs, len(output_powers)))
+        assert self._gain_file is None
+        gains = np.empty((runs, len(output_powers)), dtype=np.float)
         for i in range(runs):
-            print("\nRun " + str(i + 1) + ":")
+            print("\nRun {0:d}:".format(i + 1))
             state = (get_real_power, gains[i], iter(range(gains[i].size)))
             self.power_sweep(output_powers, self.profile_callback, state)
 
@@ -132,8 +133,9 @@ class SignalGenerator(BaseDevice):
                 gainfile.write("{0:.2f} {1:.2f} {2:.2f}\n".format(*vals))
 
     @staticmethod
-    def profile_callback(raw_power, state):
+    def profile_callback(raw_power, real_power, state):
         """ get description from old file """
+        real_power = None
         get_real_power, gains, counter = state
         gain = get_real_power() - raw_power
         gains[next(counter)] = gain
