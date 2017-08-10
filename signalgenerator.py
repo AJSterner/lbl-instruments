@@ -46,7 +46,7 @@ class SignalGenerator(BaseDevice):
         super(SignalGenerator, self).__init__(interface)
         self._gain_file = gain_file
         if self._gain_file is not None:
-            raws, gains = np.loadtxt(self._gain_file, unpack=True)
+            raws, gains = np.loadtxt(self._gain_file, unpack=True, usecols=[0, 1])
             self._raw_to_real = interp1d(raws, raws + gains)
             self._real_to_raw = interp1d(raws + gains, raws)
             self.min_output = min_output if min_output is not None else self.raw_to_real(raws[0])
@@ -73,11 +73,11 @@ class SignalGenerator(BaseDevice):
     @power.setter
     def power(self, value):
         """ sets real power """
+        assert self.min_output <= value <= self.max_output
         new_power = self.real_to_raw(value)
-        assert self.min_output <= new_power <= self.max_output
         self.raw_power = new_power
 
-    def power_sweep(self, output_powers, callback, state=None):
+    def power_sweep(self, output_powers, callback, state=None, delay=0):
         """
         sets the power to each power in out_powers in order calling callback with each set power
 
@@ -96,9 +96,12 @@ class SignalGenerator(BaseDevice):
         try:
             self.signal_on = True
             sleep(1)
+
             for power in output_powers:
+                raw = self.real_to_raw(power)
                 self.power = power
-                callback(power, self.raw_to_real(power), state)
+                sleep(delay)
+                callback(raw, power, state)
         except:
             self.signal_on = False
             raise
@@ -108,13 +111,13 @@ class SignalGenerator(BaseDevice):
     def raw_to_real(self, raw_power):
         """ returns real output from raw output """
         if self._gain_file is not None:
-            return self._raw_to_real(raw_power)
+            return float(self._raw_to_real(raw_power))
         return raw_power
 
     def real_to_raw(self, real_power):
         """ returns raw power from real power """
         if self._gain_file is not None:
-            return self._real_to_raw(real_power)
+            return float(self._real_to_raw(real_power))
         return real_power
 
     def profile(self, filename, output_powers, get_real_power, runs=3):

@@ -59,8 +59,8 @@ class SocketInterface(BaseInterface):
     """
     Interface to talk through a socket
     """
-    def __init__(self, addr, timeout=10.0, source_address=None):
-        self._sock = socket.create_connection(addr, timeout, source_address)
+    def __init__(self, addr, timeout=10000, source_address=None):
+        self._sock = socket.create_connection(addr, timeout/1E3, source_address)
 
     def write_raw(self, message):
         try:
@@ -104,7 +104,7 @@ class PrologixEnetController(SocketInterface):
     """ used to control multiple devices on a Prologix Ethernet controller """
     _PORT = 1234
     _eos = {'\r\n':0, '\r':1, '\n':2, '':3} # gpib termination chars
-    def __init__(self, ip, timeout=10.0, source_address=None):
+    def __init__(self, ip, timeout=10000, source_address=None):
         super(PrologixEnetController, self).__init__((ip, self._PORT),
                                                      timeout=timeout,
                                                      source_address=source_address)
@@ -163,10 +163,16 @@ class PrologixEnetInterface(BaseInterface):
 MAV = 0x10
 class TempPrologixEnetInterface(SocketInterface):
     """ works for only one device at a time """
-    def __init__(self, gpib_addr, addr, timeout=10.0, source_address=None):
+    def __init__(self, gpib_addr, addr, timeout=10000, source_address=None):
         check_gpib(gpib_addr)
-        super(TempPrologixEnetInterface, self).__init__(addr, timeout, source_address)
+        super(TempPrologixEnetInterface, self).__init__(addr, 1000, source_address)
         self.write_raw("++mode 1\n++auto 0\n++addr " + str(gpib_addr) + '\n'+ '++eos 0\n*CLS;*WAI;*SRE 32\n')
+        try:
+            while True:
+                print("TRY:" + self._read_raw())
+        except InterfaceTimeoutError:
+            print("DONE")
+            self.timeout = timeout
 
     def read_raw(self, size=None):
         timeout = self.timeout
@@ -183,12 +189,14 @@ class TempPrologixEnetInterface(SocketInterface):
                     return self._read_raw()
             except InterfaceTimeoutError:
                 pass
-        print("setting timout {}".format(timeout))
         self.timeout = timeout
         raise InterfaceTimeoutError
 
     def _read_raw(self, size=None):
         return super(TempPrologixEnetInterface, self).read_raw(size)
+
+    def __del__(self):
+        self.write_raw("++rst\n")
         
 
 # class PrologixController(SocketInterface):

@@ -1,5 +1,7 @@
+data/
 llrf*
 adc*
 test*
 BNC*
 *.pyc
+sat_lvl
