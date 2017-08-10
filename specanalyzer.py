@@ -128,18 +128,15 @@ class RandSFSP(SpectrumAnalyzer):
     def continuous_sweep(self, value):
         """ set continuous sweep """
         arg = "ON" if value else "OFF"
-        opc = self.query("*WAI;INIT:CONT " + arg + ";*OPC?")
-        assert int(opc) == 1
+        self.sync_cmd("*WAI;INIT:CONT " + arg)
 
     def take_sweep(self):
         """ takes a single sweep and waits for completion """
-        opc = self.query("INIT;*OPC?")
-        assert int(opc) == 1
+        self.sync_cmd("INIT")
 
     def peak_power(self):
         """ returns peak power """
-        power, opc = self.query("*WAI;CALC:MARK:MAX;*WAI;CALC:MARK:Y?;*WAI;*OPC?").split(';')
-        assert int(opc) == 1
+        power = self.query("CALC:MARK:MAX;*WAI;CALC:MARK:Y?")
         return float(power)
 
     def get_peak(self):
@@ -149,25 +146,21 @@ class RandSFSP(SpectrumAnalyzer):
 
     def peak_frequency(self):
         """ returns the frequency of peak """
-        freq, opc = self.query("CALC:MARK:MAX;*WAI;CALC:MARK:X?;*OPC?").split(';')
-        assert int(opc) == 1
-
+        freq = self.query("CALC:MARK:MAX;*WAI;CALC:MARK:X?")
         return float(freq)
 
     def display_on(self, disp_on=True):
         """ turns display on or off """
         arg = "ON" if disp_on else "OFF"
-        opc = self.query("SYST:DISP:UPD " + arg + ";*OPC?")
-        assert int(opc) == 1
+        self.write("SYST:DISP:UPD " + arg + ";*WAI")
 
     def auto_ref_lvl(self):
-        """ runs the """
-        opc = self.query("*WAI;SENS:POW:ACH:PRES:RLEV;*WAI;*OPC?")
-        assert int(opc) == 1
+        """ """
+        self.sync_cmd("SENS:POW:ACH:PRES:RLEV")
 
-    def sync_opc(self):
-        """ queries operation complete? """
-        assert int(self.query("*OPC?")) == 1
+    def sync_cmd(self, cmd):
+        """ queries operation complete after sending command """
+        assert int(self.query(cmd + ";*OPC?")) == 1
 
     def syst_err(self):
         """ queries system err queue and returns result """
@@ -179,5 +172,5 @@ class RandSFSP(SpectrumAnalyzer):
 
     def rst(self):
         """ resets system """
-        opc = self.query("*RST;*OPC?")
-        assert int(opc) == 1
+        self.write("*RST;*WAI")
+
