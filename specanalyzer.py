@@ -179,5 +179,5 @@ class RandSFSP(SpectrumAnalyzer):
 
     def rst(self):
         """ resets system """
-        opc = self.query("*RST;*WAI;*OPC?")
+        opc = self.query("*RST;*OPC?")
         assert int(opc) == 1

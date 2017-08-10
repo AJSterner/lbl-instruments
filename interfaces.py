@@ -11,7 +11,7 @@ These interfaces allow you to write a shell "device class" which provides standa
 and easily merge that with built in classes which talk directly to the devices
 
 """
-
+import time
 import socket
 import select
 import warnings
@@ -160,28 +160,35 @@ class PrologixEnetInterface(BaseInterface):
     def gpib_addr(self):
         return self._gpib_addr
 
-
+MAV = 0x10
 class TempPrologixEnetInterface(SocketInterface):
     """ works for only one device at a time """
     def __init__(self, gpib_addr, addr, timeout=10.0, source_address=None):
         check_gpib(gpib_addr)
         super(TempPrologixEnetInterface, self).__init__(addr, timeout, source_address)
-        self.write_raw("++mode 1\n++auto 0\n++addr " + str(gpib_addr) + '\n'+ '++eos 0\n')
+        self.write_raw("++mode 1\n++auto 0\n++addr " + str(gpib_addr) + '\n'+ '++eos 0\n*CLS;*WAI;*SRE 32\n')
 
     def read_raw(self, size=None):
         timeout = self.timeout
         self.timeout = 50
         runs = int(timeout // 50 + 1)
-        for i in range(runs): 
-            self.write_raw("++read {:d}\n".format(ord('\n')))
-#            self.write_raw("++read eoi\n")
+        for i in range(runs):
             try:
-                message = super(TempPrologixEnetInterface, self).read_raw(size)
-                self.timeout = timeout
-                return message
+                self.write_raw("++spoll\n")
+                stb = int(self._read_raw().rstrip('\r\n'))
+                time.sleep(.05)
+                if stb == MAV:
+                    self.timeout = timeout
+                    self.write_raw("++read {:d}\n".format(ord('\n')))
+                    return self._read_raw()
             except InterfaceTimeoutError:
                 pass
+        print("setting timout {}".format(timeout))
+        self.timeout = timeout
         raise InterfaceTimeoutError
+
+    def _read_raw(self, size=None):
+        return super(TempPrologixEnetInterface, self).read_raw(size)
         
 
 # class PrologixController(SocketInterface):

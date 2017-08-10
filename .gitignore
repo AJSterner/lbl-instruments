@@ -1,6 +1,5 @@
 llrf*
 adc*
-*.pyc
-testspec.py
-testprofile
+test*
 BNC*
+*.pyc
