@@ -66,6 +66,10 @@ class SpectrumAnalyzer(BaseDevice):
         """ returns peak frequency """
         raise NotImplementedError
 
+    def get_peak(self):
+        """ runs necessary ref lvl adjustments and then returns peak """
+        raise NotImplementedError
+
 
 class RandSFSP(SpectrumAnalyzer):
     """
@@ -155,7 +159,7 @@ class RandSFSP(SpectrumAnalyzer):
         self.write("SYST:DISP:UPD " + arg + ";*WAI")
 
     def auto_ref_lvl(self):
-        """ """
+        """ sets ref lvl to optimal value """
         self.sync_cmd("SENS:POW:ACH:PRES:RLEV")
 
     def sync_cmd(self, cmd):
@@ -174,3 +178,87 @@ class RandSFSP(SpectrumAnalyzer):
         """ resets system """
         self.write("*RST;*WAI")
 
+
+class HP8593E(SpectrumAnalyzer):
+    """ generic spectrum analyzer class """
+
+    @property
+    def center_frequency(self):
+        """ get window center frequency """
+        return float(self.query('CF?'))
+
+    @center_frequency.setter
+    def center_frequency(self, value):
+        """ center frequency setter in MHZ"""
+        self.write('CF {:f} MHZ'.format(value))
+
+    @property
+    def span(self):
+        """ get window span """
+        return float(self.query('SP?'))
+
+    @span.setter
+    def span(self, value):
+        """ set window span """
+        self.write('SP {:f} MHZ'.format(value))
+
+    @property
+    def reference_level(self):
+        """ get reference level """
+        return float(self.query('RL?'))
+
+    @reference_level.setter
+    def reference_level(self, value):
+        """ set reference level """
+        self.write('RL {:f} DB'.format(value))
+
+    @property
+    def continuous_sweep(self):
+        """ return true if continuous sweep on """
+        return bool(int(self.query('CONT?')))
+
+    @continuous_sweep.setter
+    def continuous_sweep(self, value):
+        """ set continuous sweep """
+        if value:
+            self.write('CONT')
+        else:
+            self.write('SNGLS')
+
+    def set_window(self, freq=None, span=None, ref_lvl=None):
+        """ sets window for given properties """
+        if freq is not None:
+            self.center_frequency = freq
+        if span is not None:
+            self.span = span
+        if ref_lvl is not None:
+            self.reference_level = ref_lvl
+
+    def take_sweep(self):
+        """ takes single sweep """
+        # TODO: sync
+        self.sync_cmd('TS')
+
+    def peak_power(self):
+        """ returns peak power in dBm """
+        return float(self.query('MKA?'))
+
+    def peak_frequency(self):
+        """ returns peak frequency """
+        return float(self.query('MKF?'))
+
+    def sync_cmd(self, cmd):
+        """ queries operation complete after sending command """
+        assert int(self.query(cmd + ";*OPC?")) == 1
+
+    def peak_zoom(self):
+        """ zoom to peak """
+        self.write('PKZOOM 1MHZ')
+        # Check peak zoom found peak
+        peak_ok = self.query('PKZMOK?;')
+        assert int(peak_ok) != 0
+
+    def get_peak(self):
+        """ returns peak power after adjusting ref lvl """
+        self.peak_zoom()
+        return self.peak_power()
