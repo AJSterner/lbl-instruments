@@ -180,7 +180,10 @@ class RandSFSP(SpectrumAnalyzer):
 
 
 class HP8593E(SpectrumAnalyzer):
-    """ generic spectrum analyzer class """
+    """
+    class for HP8593E spectrum analyzer
+    WARNING: doesn't work with prologix enet controller
+    """
 
     @property
     def center_frequency(self):
